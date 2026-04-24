@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Street light readings / Vital City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<style>
+:root {
+  --vc-black: #050507;
+  --vc-bg: #0a0a0d;
+  --vc-surface: #12121a;
+  --vc-surface-2: #1a1a24;
+  --vc-border: rgba(255,255,255,0.08);
+  --vc-text: #ffffff;
+  --vc-text-2: rgba(255,255,255,0.72);
+  --vc-dim: rgba(255,255,255,0.5);
+  --vc-chartreuse: #dde44c;
+  --vc-orange: #ff7c53;
+  --vc-magenta: #e7466d;
+  --vc-green: #4fbe5a;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans);
+  background: var(--vc-bg);
+  color: var(--vc-text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: 100vh;
+}
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+}
+
+/* ───────── Sidebar ───────── */
+.sidebar {
+  background: var(--vc-surface);
+  border-right: 1px solid var(--vc-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.sb-head {
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid var(--vc-border);
+}
+.kicker {
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vc-chartreuse);
+  margin-bottom: 10px;
+}
+h1 {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.dek {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--vc-text-2);
+  font-weight: 400;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--vc-border);
+  margin: 0;
+}
+.stat {
+  background: var(--vc-surface);
+  padding: 14px 10px;
+  text-align: center;
+}
+.stat-n {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+.stat-l {
+  margin-top: 4px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vc-dim);
+}
+.stat.dark .stat-n { color: var(--vc-magenta); }
+.stat.dim .stat-n { color: var(--vc-orange); }
+.stat.adq .stat-n { color: var(--vc-chartreuse); }
+.stat.well .stat-n { color: var(--vc-green); }
+
+/* Filter group */
+.sb-section {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--vc-border);
+}
+.sb-h {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vc-dim);
+  margin-bottom: 12px;
+}
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--vc-border);
+  background: transparent;
+  color: var(--vc-text-2);
+  cursor: pointer;
+  transition: all .15s;
+  font-family: var(--font-sans);
+}
+.tag:hover { border-color: rgba(255,255,255,0.2); color: var(--vc-text); }
+.tag.active { background: var(--vc-text); color: var(--vc-black); border-color: var(--vc-text); }
+.tag .dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* List */
+.list-wrap { flex: 1; overflow-y: auto; }
+.list-item {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--vc-border);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: background .12s;
+}
+.list-item:hover { background: var(--vc-surface-2); }
+.li-badge {
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  border-radius: 8px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--vc-black);
+  line-height: 1;
+}
+.li-badge-unit { font-size: 7px; opacity: 0.7; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.li-body { flex: 1; min-width: 0; }
+.li-addr {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.li-meta {
+  font-size: 11px;
+  color: var(--vc-dim);
+  margin-top: 3px;
+}
+.li-reported {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--vc-green);
+  font-weight: 600;
+}
+
+/* Empty state */
+.empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--vc-dim);
+}
+.empty-ico { font-size: 32px; margin-bottom: 12px; }
+.empty-t { font-size: 14px; font-weight: 600; color: var(--vc-text-2); }
+.empty-d { font-size: 12px; margin-top: 6px; font-family: var(--font-serif); line-height: 1.5; }
+
+/* ───────── Map ───────── */
+.map-wrap { position: relative; height: 100%; }
+#map { position: absolute; inset: 0; }
+
+.legend {
+  position: absolute;
+  bottom: 16px; left: 16px;
+  background: rgba(10,10,13,0.9);
+  border: 1px solid var(--vc-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 11px;
+  backdrop-filter: blur(6px);
+}
+.legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* Popup */
+.mapboxgl-popup-content {
+  background: var(--vc-surface) !important;
+  color: var(--vc-text) !important;
+  border: 1px solid var(--vc-border);
+  border-radius: 8px !important;
+  padding: 14px !important;
+  font-family: var(--font-sans);
+  min-width: 200px;
+  max-width: 260px;
+}
+.mapboxgl-popup-tip { display: none !important; }
+.pop-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--vc-black);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.pop-lux {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.pop-lux-u { font-size: 11px; color: var(--vc-dim); font-weight: 500; margin-left: 4px; }
+.pop-addr { font-size: 12px; color: var(--vc-text-2); line-height: 1.4; margin-top: 8px; }
+.pop-meta { font-size: 10px; color: var(--vc-dim); margin-top: 6px; letter-spacing: 0.02em; }
+.pop-rep { font-size: 10px; color: var(--vc-green); font-weight: 600; margin-top: 6px; }
+.mapboxgl-popup-close-button { color: var(--vc-dim) !important; font-size: 18px !important; padding: 4px 8px !important; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sb-head">
+      <div class="kicker">Rubber Meets Road / Lighting</div>
+      <h1>Street light readings</h1>
+      <p class="dek">Crowdsourced lux measurements from <strong>Street light meter</strong>. Every reading shows the lighting level, time, and location — helping identify dark spots across New York City.</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="stat-total">0</div><div class="stat-l">Total</div></div>
+      <div class="stat dark"><div class="stat-n" id="stat-dark">0</div><div class="stat-l">Dark</div></div>
+      <div class="stat dim"><div class="stat-n" id="stat-dim">0</div><div class="stat-l">Dim</div></div>
+      <div class="stat adq"><div class="stat-n" id="stat-adq">0</div><div class="stat-l">Adequate</div></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-h">Filter by classification</div>
+      <div class="tag-row" id="label-filters">
+        <button class="tag active" data-label="all">All</button>
+        <button class="tag" data-label="Dark"><span class="dot" style="background:#e7466d"></span>Dark</button>
+        <button class="tag" data-label="Dim"><span class="dot" style="background:#ff7c53"></span>Dim</button>
+        <button class="tag" data-label="Adequate"><span class="dot" style="background:#dde44c"></span>Adequate</button>
+        <button class="tag" data-label="Well Lit"><span class="dot" style="background:#4fbe5a"></span>Well Lit</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-h">Time range</div>
+      <div class="tag-row" id="time-filters">
+        <button class="tag" data-days="7">7d</button>
+        <button class="tag" data-days="30">30d</button>
+        <button class="tag" data-days="90">90d</button>
+        <button class="tag active" data-days="365">1y</button>
+        <button class="tag" data-days="3650">All</button>
+      </div>
+    </div>
+
+    <div class="list-wrap" id="list-wrap">
+      <div class="empty" id="empty-state">
+        <div class="empty-ico">💡</div>
+        <div class="empty-t">No readings yet</div>
+        <div class="empty-d">Readings taken with Street light meter will appear here as dots on the map.</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="legend">
+      <div style="font-weight:700;margin-bottom:4px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--vc-dim);">Lighting</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#e7466d"></span>Dark (≤5 lux)</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#ff7c53"></span>Dim (≤15)</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#dde44c"></span>Adequate (≤30)</div>
+      <div class="legend-row"><span class="legend-dot" style="background:#4fbe5a"></span>Well Lit (>30)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://streetlightmeter-api.josh-greenman.workers.dev';
+
+const LABEL_COLOR = {
+  'Dark': '#e7466d',
+  'Dim': '#ff7c53',
+  'Adequate': '#dde44c',
+  'Well Lit': '#4fbe5a'
+};
+
+let state = {
+  label: 'all',
+  days: 365,
+  features: []
+};
+
+mapboxgl.accessToken = 'pk.' + 'eyJ1IjoieHIyMDA2IiwiYSI6ImNtaTdkdHpyMjA1eTEya3EwbjVkeHh0OHcifQ' + '.63Tlvydk2jod3GrgjFyAKw';
+
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v11',
+  center: [-73.96, 40.72],
+  zoom: 10.2
+});
+map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
+
+const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true, offset: 12, maxWidth: '280px' });
+
+map.on('load', async () => {
+  map.addSource('readings', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'readings-glow',
+    type: 'circle',
+    source: 'readings',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 8, 14, 22],
+      'circle-color': [
+        'match', ['get', 'label'],
+        'Dark', '#e7466d',
+        'Dim', '#ff7c53',
+        'Adequate', '#dde44c',
+        'Well Lit', '#4fbe5a',
+        '#888'
+      ],
+      'circle-blur': 1.1,
+      'circle-opacity': 0.45
+    }
+  });
+  map.addLayer({
+    id: 'readings-dot',
+    type: 'circle',
+    source: 'readings',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4, 14, 8],
+      'circle-color': [
+        'match', ['get', 'label'],
+        'Dark', '#e7466d',
+        'Dim', '#ff7c53',
+        'Adequate', '#dde44c',
+        'Well Lit', '#4fbe5a',
+        '#888'
+      ],
+      'circle-stroke-color': '#0a0a0d',
+      'circle-stroke-width': 1.5
+    }
+  });
+
+  map.on('click', 'readings-dot', e => {
+    if (!e.features?.length) return;
+    const f = e.features[0];
+    showPopup(f);
+  });
+  map.on('mouseenter', 'readings-dot', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'readings-dot', () => map.getCanvas().style.cursor = '');
+
+  await loadReadings();
+});
+
+async function loadReadings() {
+  try {
+    const qs = new URLSearchParams({ days: state.days, limit: 10000 });
+    if (state.label !== 'all') qs.set('label', state.label);
+    const res = await fetch(`${API_BASE}/readings/geojson?${qs}`);
+    const data = await res.json();
+    state.features = data.features || [];
+    map.getSource('readings').setData(data);
+    renderSidebar();
+    if (state.features.length > 0) fitToFeatures();
+  } catch (e) {
+    console.error('loadReadings', e);
+  }
+}
+
+function fitToFeatures() {
+  const f = state.features;
+  if (!f.length) return;
+  let minLng = 999, minLat = 999, maxLng = -999, maxLat = -999;
+  for (const ft of f) {
+    const [lng, lat] = ft.geometry.coordinates;
+    if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
+  }
+  if (f.length === 1) {
+    map.flyTo({ center: f[0].geometry.coordinates, zoom: 15 });
+  } else {
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, maxZoom: 14, duration: 800 });
+  }
+}
+
+function renderSidebar() {
+  const f = state.features;
+  // Stats
+  const counts = { total: f.length, Dark: 0, Dim: 0, Adequate: 0, 'Well Lit': 0 };
+  for (const ft of f) {
+    const l = ft.properties.label;
+    if (counts[l] != null) counts[l]++;
+  }
+  document.getElementById('stat-total').textContent = counts.total;
+  document.getElementById('stat-dark').textContent = counts.Dark;
+  document.getElementById('stat-dim').textContent = counts.Dim;
+  document.getElementById('stat-adq').textContent = counts.Adequate;
+
+  // List
+  const wrap = document.getElementById('list-wrap');
+  if (!f.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-ico">💡</div><div class="empty-t">No readings in this range</div><div class="empty-d">Take a reading with Street light meter to add a point here.</div></div>';
+    return;
+  }
+  const sorted = [...f].sort((a, b) =>
+    new Date(b.properties.createdAt) - new Date(a.properties.createdAt)
+  );
+  wrap.innerHTML = sorted.slice(0, 200).map(ft => {
+    const p = ft.properties;
+    const [lng, lat] = ft.geometry.coordinates;
+    const color = LABEL_COLOR[p.label] || '#888';
+    const luxStr = Math.round(p.lux * 10) / 10;
+    const t = new Date(p.createdAt);
+    const tStr = t.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      + ' ' + t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="list-item" data-lng="${lng}" data-lat="${lat}" data-id="${p.id}">
+      <div class="li-badge" style="background:${color};">
+        ${luxStr}
+        <div class="li-badge-unit">lux</div>
+      </div>
+      <div class="li-body">
+        <div class="li-addr">${escapeHtml(p.address || 'Unknown location')}</div>
+        <div class="li-meta">${p.label} · ${tStr}</div>
+        ${p.reported ? '<div class="li-reported">✓ Reported to 311</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.list-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const lng = parseFloat(el.dataset.lng);
+      const lat = parseFloat(el.dataset.lat);
+      const id = parseInt(el.dataset.id);
+      map.flyTo({ center: [lng, lat], zoom: 16, duration: 700 });
+      const f = state.features.find(ft => ft.properties.id === id);
+      if (f) setTimeout(() => showPopup(f), 720);
+    });
+  });
+}
+
+function showPopup(f) {
+  const p = f.properties;
+  const [lng, lat] = f.geometry.coordinates;
+  const color = LABEL_COLOR[p.label] || '#888';
+  const luxStr = Math.round(p.lux * 10) / 10;
+  const t = new Date(p.createdAt);
+  const tStr = t.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' · ' + t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  popup
+    .setLngLat([lng, lat])
+    .setHTML(`
+      <div class="pop-badge" style="background:${color};">${p.label}</div>
+      <div class="pop-lux">${luxStr}<span class="pop-lux-u">lux</span></div>
+      <div class="pop-addr">${escapeHtml(p.address || 'Unknown location')}</div>
+      <div class="pop-meta">${tStr}</div>
+      ${p.reported ? '<div class="pop-rep">✓ Reported to NYC 311</div>' : ''}
+    `)
+    .addTo(map);
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+// Filter controls
+document.getElementById('label-filters').addEventListener('click', e => {
+  const btn = e.target.closest('.tag');
+  if (!btn) return;
+  document.querySelectorAll('#label-filters .tag').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  state.label = btn.dataset.label;
+  loadReadings();
+});
+document.getElementById('time-filters').addEventListener('click', e => {
+  const btn = e.target.closest('.tag');
+  if (!btn) return;
+  document.querySelectorAll('#time-filters .tag').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  state.days = parseInt(btn.dataset.days);
+  loadReadings();
+});
+</script>
+</body>
+</html>
